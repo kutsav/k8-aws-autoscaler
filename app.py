@@ -1,13 +1,15 @@
 from flask import Flask
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-import boto3,inspect,logging,json,requests
+import boto3,inspect,logging,json,requests,os
 app = Flask(__name__)
 
-global region, prom_url, THRESHOLD_CPU, THRESHOLD_MEMORY
-THRESHOLD_CPU=70
-THRESHOLD_MEMORY=80
-prom_url="http://localhost:8080"
+global region, prom_url, asg_name, threshold_cpu, threshold_memory
+
+threshold_cpu=os.environ['THRESHOLD_CPU']
+threshold_memory=os.environ['THRESHOLD_MEMORY']
+prom_url=os.environ['PROMETHEUS_URL']
+asg_name=os.environ['ASG_NAME']
 region='ap-south-1'
 
 def fetch_prometheus_metrics(query):
@@ -45,7 +47,7 @@ def check_metrics():
 		metrics=get_metrics()
 		cpu=metrics['cpu']
 		memory=metrics['memory']
-		if cpu > int(THRESHOLD_CPU) or memory > int(THRESHOLD_MEMORY): 
+		if cpu > int(threshold_cpu) or memory > int(threshold_memory): 
 			logging.info("Current resource utilization has crossed the threshold, Scale up is required.")
 		else:
 			logging.info("All metrics are below threshold. No action required.")
