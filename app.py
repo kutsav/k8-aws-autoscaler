@@ -10,7 +10,7 @@ threshold_cpu=os.environ['THRESHOLD_CPU']
 threshold_memory=os.environ['THRESHOLD_MEMORY']
 prom_url=os.environ['PROMETHEUS_URL']
 asg_name=os.environ['ASG_NAME']
-region='ap-south-1'
+region=os.environ['REGION']
 
 def fetch_prometheus_metrics(query):
 	try:
@@ -41,7 +41,39 @@ def get_metrics():
 		logging.error("Exception in method %s(): %s" %(inspect.currentframe().f_code.co_name,str(e)))
 	
 
-def check_metrics():
+def get_asg_capacity(asg):
+	try:
+		client = boto3.client('autoscaling',region_name=region)
+		response = client.describe_auto_scaling_groups(AutoScalingGroupNames=[ asg, ])		
+		response = client.describe_auto_scaling_groups(AutoScalingGroupNames=[ asg, ])
+		min_size=response['AutoScalingGroups'][0]['MinSize']
+		max_size=response['AutoScalingGroups'][0]['MaxSize']
+		desired=response['AutoScalingGroups'][0]['DesiredCapacity']
+		logging.info("Current ASG capacity config ==>  Min: %s\t Max: %s\t Desired: %s" %(str(min_size),str(max_size),str(desired)))
+		capacity={}
+		capacity['min']=min_size
+		capacity['max']=max_size
+		capacity['desired']=desired
+		return capacity
+	except Exception as e:
+		logging.error("Exception in method %s(): %s" %(inspect.currentframe().f_code.co_name,str(e)))	
+
+def scale_asg(asg):
+	try:
+		client = boto3.client('autoscaling',region_name=region)
+		capacity=get_asg_capacity(asg)	
+		new_desired=int(capacity['desired'])+1
+		logging.info("New desired capacity: %s" %(str(new_desired)))
+		if new_desired <= int(capacity['max']):
+			logging.info("Scaling the ASG to new capacity.")
+		else:
+			logging.info("New desired count exceeds max instance count. Scaling stopped because of that.")
+		
+	except Exception as e:
+		logging.error("Exception in method %s(): %s" %(inspect.currentframe().f_code.co_name,str(e)))	
+
+
+def autoscaler():
 	try:
 		client = boto3.client('autoscaling',region_name=region)
 		metrics=get_metrics()
@@ -49,18 +81,11 @@ def check_metrics():
 		memory=metrics['memory']
 		if cpu > int(threshold_cpu) or memory > int(threshold_memory): 
 			logging.info("Current resource utilization has crossed the threshold, Scale up is required.")
+			## Call method to scale the asg group
+			scale_asg(asg_name)
 		else:
 			logging.info("All metrics are below threshold. No action required.")
 		
-				
-	except Exception as e:
-		logging.error("Exception in method %s(): %s" %(inspect.currentframe().f_code.co_name,str(e)))	
-
-
-
-def scale_asg():
-	try:
-		client = boto3.client('autoscaling',region_name=region)
 				
 	except Exception as e:
 		logging.error("Exception in method %s(): %s" %(inspect.currentframe().f_code.co_name,str(e)))	
@@ -71,7 +96,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,format='%(levelname)s %(asctime)s - %(message)s', datefmt='%d-%b-%Y %H:%M:%S')
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=check_metrics, trigger="interval", seconds=10)
+    scheduler.add_job(func=autoscaler, trigger="interval", seconds=30)
     scheduler.start()
 
     atexit.register(lambda: scheduler.shutdown())
