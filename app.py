@@ -1,7 +1,7 @@
 from flask import Flask
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-import boto3,inspect,logging,json,requests,os
+import boto3,inspect,logging,json,requests,os,time
 app = Flask(__name__)
 
 global region, prom_url, asg_name, threshold_cpu, threshold_memory
@@ -66,6 +66,10 @@ def scale_asg(asg):
 		logging.info("New desired capacity: %s" %(str(new_desired)))
 		if new_desired <= int(capacity['max']):
 			logging.info("Scaling the ASG to new capacity.")
+			client = boto3.client('autoscaling',region_name=region)
+			response = client.set_desired_capacity( AutoScalingGroupName=asg, DesiredCapacity=int(new_desired), HonorCooldown=True)
+			logging.info("ASG scaled to new capacity, setting the job to sleep for 3 minutes, for new instance to join the cluster and re-evaluate the autoscaling thresholds.")	
+			time.sleep(180)
 		else:
 			logging.info("New desired count exceeds max instance count. Scaling stopped because of that.")
 		
