@@ -1,0 +1,42 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8-aws-autoscaler
+  namespace: kube-system
+  labels:
+    app: k8-aws-autoscaler
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: k8-aws-autoscaler
+  template:
+    metadata:
+      labels:
+        app: k8-aws-autoscaler
+    spec:
+      containers:
+        - image: quay.io/kutsav/k8-aws-autoscaler:v1.0
+          name: k8-aws-autoscaler
+          imagePullPolicy: "Always"
+          resources:
+            limits:
+              cpu: 100m
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          env:
+            - name: REGION
+              value: "REGION"
+            - name: PROMETHEUS_URL
+              value: "http://prometheus.monitoring:80"
+            - name: ASG_NAME
+              value: "EKS_WORKER_ASG_NAME"
+            - name: THRESHOLD_CPU
+              value: "80"
+            - name: THRESHOLD_MEMORY
+              value: "80"
